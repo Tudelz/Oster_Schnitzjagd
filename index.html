@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Rad-Schnitzeljagd Göttingen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #controlBox {
+      display: none;
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px #aaa;
+      z-index: 1000;
+      font-family: sans-serif;
+    }
+
+    #markerInfo {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 60%;
+      padding: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 8px 12px;
+      font-size: 16px;
+      margin-left: 8px;
+    }
+
+    #feedback {
+      margin-top: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    #feedback.show {
+      opacity: 1;
+    }
+
+    #feedback.success {
+      color: green;
+    }
+
+    #feedback.error {
+      color: red;
+    }
+
+    .number-marker {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #334bff, #0052cc);
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 26px;
+      text-align: center;
+      box-shadow: 0 0 6px rgba(0,0,0,0.4), inset 0 0 4px rgba(255,255,255,0.2);
+      border: 2px solid white;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="controlBox">
+  <p id="markerInfo">Aufgabe erscheint hier</p>
+  <input type="text" id="passwordInput" placeholder="Passwort eingeben..." />
+  <button onclick="checkPassword()">OK</button>
+  <div id="feedback"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  const map = L.map('map').setView([51.53, 9.935], 13);
+
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Tiles © Esri'
+  });
+
+  const opentopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    attribution: '© OpenTopoMap (CC-BY-SA)'
+  });
+
+  const baseMaps = {
+    "🌍 OSM": osm,
+    "🛰️ Satellit": satellite,
+    "🏞️ Outdoor (Topo)": opentopo
+  };
+  L.control.layers(baseMaps).addTo(map);
+
+  let userLocation = null;
+  let routingLine = null;
+
+  const ORS_API_KEY = '5b3ce3597851110001cf6248101426d5ebe14e1dbbc69ff1567d58ae'; // dein Key
+
+  const stationen = [
+    {
+      coords: [51.525061, 9.979287],
+      text: "Station 1",
+      password: "1"
+    },
+    {
+      coords: [51.525061, 9.979287],
+      text: "Station 2",
+      password: "2"
+    },
+    {
+      coords: [51.511727, 9.982060],
+      text: "Station 3",
+      password: "3"
+    },
+    {
+      coords: [51.520162, 9.920486],
+      text: "Station 4",
+      password: "4"
+    }
+  ];
+
+  let currentIndex = 0;
+  let activeMarkerIndex = null;
+
+  map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+
+  map.on('locationfound', function (e) {
+    userLocation = e.latlng;
+    L.circleMarker(e.latlng, {
+      radius: 7,
+      fillColor: '#136aec',
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.9
+    }).addTo(map).bindPopup("📍 Du bist hier").openPopup();
+
+    if (stationen[currentIndex]) {
+      routeTo(stationen[currentIndex].coords);
+    }
+  });
+
+  map.on('locationerror', function (e) {
+    console.warn("Standort konnte nicht ermittelt werden: " + e.message);
+  });
+
+  function createNumberMarker(number, coords) {
+    return L.marker(coords, {
+      icon: L.divIcon({
+        html: `<div class="number-marker">${number}</div>`,
+        className: '',
+        iconSize: [34, 34],
+        iconAnchor: [17, 34]
+      })
+    });
+  }
+
+  function routeTo(targetCoords) {
+    if (!userLocation) return;
+
+    const url = `https://api.openrouteservice.org/v2/directions/cycling-regular/geojson`;
+
+    const body = {
+      coordinates: [
+        [userLocation.lng, userLocation.lat],
+        [targetCoords[1], targetCoords[0]]
+      ]
+    };
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': ORS_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(data => {
+      const coords = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      if (routingLine) {
+        map.removeLayer(routingLine);
+      }
+      routingLine = L.polyline(coords, { color: 'blue', weight: 5 }).addTo(map);
+      map.fitBounds(routingLine.getBounds(), { padding: [50, 50] });
+    })
+    .catch(err => {
+      console.error("ORS Routing Fehler:", err);
+      alert("Routing konnte nicht berechnet werden.");
+    });
+  }
+
+  function showMarker(index) {
+    const s = stationen[index];
+    const marker = createNumberMarker(index + 1, s.coords).addTo(map);
+
+    marker.on('click', () => {
+      activeMarkerIndex = index;
+      document.getElementById('controlBox').style.display = 'block';
+      document.getElementById('markerInfo').innerText = s.text;
+      document.getElementById('passwordInput').value = '';
+      document.getElementById('feedback').innerText = '';
+      document.getElementById('feedback').className = '';
+      map.setView(s.coords, 17);
+
+      if (userLocation) {
+        routeTo(s.coords);
+      }
+    });
+  }
+
+  showMarker(currentIndex);
+
+  function checkPassword() {
+    const input = document.getElementById('passwordInput').value.trim();
+    const expected = stationen[activeMarkerIndex].password;
+    const feedback = document.getElementById('feedback');
+
+    feedback.classList.remove('show', 'success', 'error');
+
+    if (input === expected) {
+      feedback.innerText = "✅ Richtig!";
+      feedback.classList.add('show', 'success');
+      setTimeout(() => {
+        document.getElementById('controlBox').style.display = 'none';
+        feedback.className = '';
+        currentIndex++;
+        if (currentIndex < stationen.length) {
+          showMarker(currentIndex);
+          if (userLocation) {
+            routeTo(stationen[currentIndex].coords);
+          }
+        } else {
+          alert("🎉 Du hast alle Aufgaben gemeistert!");
+          if (routingLine) {
+            map.removeLayer(routingLine);
+            routingLine = null;
+          }
+        }
+      }, 1000);
+    } else {
+      feedback.innerText = "❌ Falsches Passwort!";
+      feedback.classList.add('show', 'error');
+    }
+  }
+</script>
+
+</body>
+</html>
