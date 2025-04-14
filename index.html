@@ -5,6 +5,7 @@
   <title>Rad-Schnitzeljagd Göttingen</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
   <style>
     html, body, #map {
       height: 100%;
@@ -90,6 +91,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
   const map = L.map('map').setView([51.53, 9.935], 13);
@@ -117,9 +119,7 @@
   L.control.layers(baseMaps).addTo(map);
 
   let userLocation = null;
-  let routingLine = null;
-
-  const ORS_API_KEY = '5b3ce3597851110001cf6248101426d5ebe14e1dbbc69ff1567d58ae'; // dein Key
+  let routingControl = null;
 
   const stationen = [
     {
@@ -183,36 +183,20 @@
   function routeTo(targetCoords) {
     if (!userLocation) return;
 
-    const url = `https://api.openrouteservice.org/v2/directions/cycling-regular/geojson`;
+    if (routingControl) {
+      map.removeControl(routingControl);
+    }
 
-    const body = {
-      coordinates: [
-        [userLocation.lng, userLocation.lat],
-        [targetCoords[1], targetCoords[0]]
-      ]
-    };
-
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': ORS_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    })
-    .then(res => res.json())
-    .then(data => {
-      const coords = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-      if (routingLine) {
-        map.removeLayer(routingLine);
-      }
-      routingLine = L.polyline(coords, { color: 'blue', weight: 5 }).addTo(map);
-      map.fitBounds(routingLine.getBounds(), { padding: [50, 50] });
-    })
-    .catch(err => {
-      console.error("ORS Routing Fehler:", err);
-      alert("Routing konnte nicht berechnet werden.");
-    });
+    routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(userLocation.lat, userLocation.lng),
+        L.latLng(targetCoords[0], targetCoords[1])
+      ],
+      routeWhileDragging: false,
+      show: false,
+      addWaypoints: false,
+      createMarker: () => null
+    }).addTo(map);
   }
 
   function showMarker(index) {
@@ -257,9 +241,9 @@
           }
         } else {
           alert("🎉 Du hast alle Aufgaben gemeistert!");
-          if (routingLine) {
-            map.removeLayer(routingLine);
-            routingLine = null;
+          if (routingControl) {
+            map.removeControl(routingControl);
+            routingControl = null;
           }
         }
       }, 1000);
