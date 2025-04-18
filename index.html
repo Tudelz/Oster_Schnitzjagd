@@ -88,6 +88,9 @@
   <input type="text" id="passwordInput" placeholder="Passwort eingeben..." />
   <button onclick="checkPassword()">OK</button>
   <div id="feedback"></div>
+  <div id="questionBox" style="display: none; margin-top: 10px;">
+    <p id="stationQuestion" style="font-style: italic;"></p>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -120,32 +123,138 @@
 
   let userLocation = null;
   let routingControl = null;
+  let currentIndex = 0;
+  let activeMarkerIndex = null;
+  let currentTargetCoords = null;
+  let distanceCheckInterval = null;
 
   const stationen = [
     {
+      coords: [51.534844, 9.956573],
+      text: "Startpunkt Pavilion an den Schillerwiesen",
+      password: "6",
+      frage: "Wie viele Säulen hat der Pavilion?"
+    },
+    {
+      coords: [51.532282, 9.962829],
+      text: "Bubatz am legendärer Steintisch",
+      password: "VATERTAG",
+      frage: "Das Passwort ist da, wo Michi ist, wenn wir saufen..."
+    },
+    {
       coords: [51.525061, 9.979287],
-      text: "Station 1",
-      password: "1"
+      text: "Kurze Auszeit am Kehr",
+      password: "2 Euro",
+      frage: "Quanta Costa Glaspfand?"
+    },
+    {
+      coords: [51.517561, 9.986304],
+      text: "Osterschnaps suchen an der alten Kaserne",
+      password: "Vogelnest",
+      frage: "Das Passwort findet ihr auf einem der Osterschnapse"
     },
     {
       coords: [51.515572, 9.992363],
-      text: "Station 2",
-      password: "2"
+      text: "Nicer Flunkyball Spot",
+      password: "ICOB",
+      frage: "Für Flunkyball brauch man nur 2 Gegenstände...auf einem steht das Passwort"
     },
-    {
+  {
       coords: [51.511727, 9.982060],
-      text: "Station 3",
-      password: "3"
+      text: "Asozialer Hüttensuff",
+      password: "Pfeffi",
+      frage: "Das Passwort ist das was getrunken wird"
     },
     {
       coords: [51.520162, 9.920486],
-      text: "Station 4",
-      password: "4"
-    }
+      text: "Lecker Bierchen an der Diemadener Warte",
+      password: "7",
+      frage: "Hier ist irgendwo ein Papier versteckt, dass euch beim Passwort lösen hilft."
+    },
+    {
+      coords: [51.484026, 9.970125],
+      text: "Bubatz im Gartetal",
+      password: "Fritze Merz",
+      frage: "Wer fragte: 'Was ist Bubatz?' und macht manchmal Tünkram?"
+    },
+    {
+      coords: [51.484233, 9.954168],
+      text: "Bierchen am Wasser",
+      password: "Kiessee",
+      frage: "Welches Gewässer wurde oder könnte auch als 'Golf von Göttingen' bezeichnet werden"
+    },
+    {
+      coords: [51.520174, 9.920399],
+      text: "Bierchen am Wasser",
+      password: "Fertig",
+      frage: ""
+    },
   ];
 
-  let currentIndex = 0;
-  let activeMarkerIndex = null;
+  function createNumberMarker(number, coords) {
+    return L.marker(coords, {
+      icon: L.divIcon({
+        html: `<div class="number-marker">${number}</div>`,
+        className: '',
+        iconSize: [34, 34],
+        iconAnchor: [17, 34]
+      })
+    });
+  }
+
+  function routeTo(targetCoords) {
+    if (!userLocation) return;
+    if (routingControl) {
+      map.removeControl(routingControl);
+    }
+    routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(userLocation.lat, userLocation.lng),
+        L.latLng(targetCoords[0], targetCoords[1])
+      ],
+      routeWhileDragging: false,
+      show: false,
+      addWaypoints: false,
+      createMarker: () => null
+    }).addTo(map);
+  }
+
+  function showMarker(index) {
+    const station = stationen[index];
+    const marker = createNumberMarker(index + 1, station.coords).addTo(map);
+
+    marker.on('click', () => {
+      activeMarkerIndex = index;
+      currentTargetCoords = L.latLng(station.coords[0], station.coords[1]);
+
+      document.getElementById('controlBox').style.display = 'block';
+      document.getElementById('markerInfo').innerText = station.text;
+      document.getElementById('passwordInput').value = '';
+      document.getElementById('feedback').innerText = '';
+      document.getElementById('feedback').className = '';
+      document.getElementById('questionBox').style.display = 'none';
+
+      map.setView(station.coords, 17);
+      if (userLocation) {
+        routeTo(station.coords);
+      }
+
+      if (distanceCheckInterval) {
+        clearInterval(distanceCheckInterval);
+      }
+
+      distanceCheckInterval = setInterval(() => {
+        if (userLocation && currentTargetCoords) {
+          const dist = map.distance(userLocation, currentTargetCoords);
+          if (dist <= 100) {
+            document.getElementById('questionBox').style.display = 'block';
+            document.getElementById('stationQuestion').innerText = station.frage || "Keine Frage hinterlegt.";
+            clearInterval(distanceCheckInterval);
+          }
+        }
+      }, 5000);
+    });
+  }
 
   map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
 
@@ -169,56 +278,14 @@
     console.warn("Standort konnte nicht ermittelt werden: " + e.message);
   });
 
-  function createNumberMarker(number, coords) {
-    return L.marker(coords, {
-      icon: L.divIcon({
-        html: `<div class="number-marker">${number}</div>`,
-        className: '',
-        iconSize: [34, 34],
-        iconAnchor: [17, 34]
-      })
-    });
-  }
-
-  function routeTo(targetCoords) {
-    if (!userLocation) return;
-
-    if (routingControl) {
-      map.removeControl(routingControl);
-    }
-
-    routingControl = L.Routing.control({
-      waypoints: [
-        L.latLng(userLocation.lat, userLocation.lng),
-        L.latLng(targetCoords[0], targetCoords[1])
-      ],
-      routeWhileDragging: false,
-      show: false,
-      addWaypoints: false,
-      createMarker: () => null
-    }).addTo(map);
-  }
-
-  function showMarker(index) {
-    const s = stationen[index];
-    const marker = createNumberMarker(index + 1, s.coords).addTo(map);
-
-    marker.on('click', () => {
-      activeMarkerIndex = index;
-      document.getElementById('controlBox').style.display = 'block';
-      document.getElementById('markerInfo').innerText = s.text;
-      document.getElementById('passwordInput').value = '';
-      document.getElementById('feedback').innerText = '';
-      document.getElementById('feedback').className = '';
-      map.setView(s.coords, 17);
-
-      if (userLocation) {
-        routeTo(s.coords);
-      }
-    });
-  }
-
-  showMarker(currentIndex);
+  // Live-Standort verfolgen
+  navigator.geolocation.watchPosition(
+    (position) => {
+      userLocation = L.latLng(position.coords.latitude, position.coords.longitude);
+    },
+    (err) => console.warn("Standortverfolgung fehlgeschlagen:", err),
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+  );
 
   function checkPassword() {
     const input = document.getElementById('passwordInput').value.trim();
@@ -240,7 +307,7 @@
             routeTo(stationen[currentIndex].coords);
           }
         } else {
-          alert("🎉 Schnnitzeljagd completed");
+          alert("🎉 Schnitzeljagd abgeschlossen!");
           if (routingControl) {
             map.removeControl(routingControl);
             routingControl = null;
@@ -252,6 +319,8 @@
       feedback.classList.add('show', 'error');
     }
   }
+
+  showMarker(currentIndex);
 </script>
 
 </body>
