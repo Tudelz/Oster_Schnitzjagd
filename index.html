@@ -95,6 +95,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
 <script>
   const map = L.map('map').setView([51.53, 9.935], 13);
@@ -280,7 +281,46 @@
             routeTo(stationen[currentIndex].coords);
           }
         } else {
-          alert("🎉 Schnitzeljagd abgeschlossen!");
+          confetti({
+  particleCount: 500,
+  spread: 150,
+  origin: { y: 0.6 },
+  zIndex: 10000
+});
+
+const finaleBox = document.createElement('div');
+finaleBox.innerHTML = `
+  <div style="
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border: 4px solid gold;
+    padding: 30px;
+    border-radius: 20px;
+    font-size: 24px;
+    font-family: sans-serif;
+    text-align: center;
+    z-index: 9999;
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.9);
+    animation: pop 0.6s ease-out;
+  ">
+    <p style="margin-bottom: 20px;">🎉 <strong>Schnitzeljagd abgeschlossen!</strong> 🎉</p>
+    <p>Ihr seid echte Göttinger Rad-Legenden!</p>
+    <button onclick="this.parentElement.remove()" style="
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      border: none;
+      background: #334bff;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    ">Okay</button>
+  </div>
+`;
+document.body.appendChild(finaleBox);
           if (routingControl) {
             map.removeControl(routingControl);
             routingControl = null;
